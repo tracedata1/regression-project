@@ -1,9 +1,6 @@
 # regression-project
 ---
-title: "project"
-author: "liang qingyan"
-date: "3/20/2022"
-output: pdf_document
+online news popularity multiple linear regression model
 ---
 
 
