@@ -28,6 +28,10 @@ https://archive.ics.uci.edu/ml/datasets/online+news+popularity#
 https://www.kaggle.com/c/ml-lab-II-c28/data
 
 
+Challenges in this data set:
+1) explorer the potential relationships among the predictor variables
+2) detect the missinging or the wrong vaules in the predictor variables
+3) the transformations of the response variable and predictor variables
 
 
 
