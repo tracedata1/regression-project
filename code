@@ -1,22 +1,42 @@
 
+---
+title: "projectv.3"
+author: "liang qingyan"
+date: "3/20/2022"
+output: pdf_document
+---
+
+
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
 news0 <- read.csv("OnlineNewsPopularity.csv")
 head(news0)
 
-data cleaning
+```
+## data cleaning
+
+
+```{r}
 #  n_non_stop_words
-round(sum(news0$n_non_stop_words>0.99)/length(news0$n_non_stop_words),2)# this variable is almost a singular vaule ,we will drop this variable in our model.
+round(sum(news0$n_non_stop_words>0.99)/length(news0$n_non_stop_words),2)# 0.97, this variable is almost a single value, we will drop this variable in our model.
 
 # kw_min_min:Worst Keyword (Min. Shares). It is weird to have negative value in this variable, we will drop this variable since there are too many wrong values.   
-sum(news0$kw_min_min==-1)  #22980 cases we cannot treat this as 
+sum(news0$kw_min_min==-1)  #22980 cases
 sum(news0$kw_avg_min==-1) # 694
 sum(news0$kw_avg_max==-1) # 0
-cor(news0[20:22]) # since kw_max_min and kw_avg_min are highly related, we will choose in our model
+cor(news0[20:22]) # since kw_max_min and kw_avg_min are highly related(r=0.94), we will choose kw_avg_max in our model
 
 
 # n_tokens_content 
 sum(news0$n_tokens_content==0)/length(news0$n_tokens_content) # 0.02979013, 1181 cases
 # we will treat 0 as missing value
+```
+```{r}
 # n_unique_tokens is Rate Of Unique Words In The Content, the value range should be (0,1),any value great than 1 should be considered as wrong.
 # indt <- which(news$n_unique_tokens>1)
 # wr <- news[indt,]
@@ -28,19 +48,133 @@ news<-news0%>%
   select(-kw_min_min,-kw_avg_min,-url,-timedelta,-n_non_stop_words ) # drop non-predictive variables, also singlar variable n_non_stop_words
   
 1-nrow(news)/nrow(news0) #  0.02981536
-nrow(news0)-nrow(news) # 1182 the total unnormal cases we delete
-data exploration
-data discription
+nrow(news0)-nrow(news) # 1182 the total cases we delete
+```
+
+
+## data exploration 
+
+### data discription
+
+```{r}
 names(news)
 summary(news)
+```
+
+```{r}
+indtm <- which(news$shares==843300)
+wrm <- news[indtm,]
+wrm
+
+
+
+indts <- which(news$self_reference_max_shares==843300)
+wrs <- news[indts,]
+wrs
+
+
+indtkwm <- which(news$kw_max_max==843300)
+wrkwm <- news[indtkwm,]
+nrow(wrkwm)/nrow(news)
+```
+
+
+
+
+```{r}
 library(Hmisc)
 par(mfrow = c(3, 2))
 hist.data.frame(news) # obviously left or right screwed, a lot of transformations would be needed to both y variable and Xs variables
-data relationship exploration
-categorical data exploration
+```
+
+
+
+
+## data relationship exploration
+
+
+```{r}
+# since they are heterogeneous set of features, we will explore the relationship among the predictor variables in each feature.
+
+# Word features
+cor(news$n_unique_tokens , news$n_non_stop_unique_tokens) # 0.885152 we will choose n_non_stop_unique_tokens in our model
+
+# Links & References features
+#"self_reference_min_shares",self_reference_max_shares" and "self_reference_avg_sharess", "num_hrefs","num_self_hrefs"
+pairs(~log(shares)+ self_reference_min_shares+self_reference_max_shares+self_reference_avg_sharess+num_hrefs+num_self_hrefs,data=news) # we can see there is obivously linear relationship among these 3 variables: "self_reference_min_shares", self_reference_max_shares" and "self_reference_avg_sharess"
+cor(news[24:26]) #  in this case we will keep "self_reference_avg_sharess" and drop "self_reference_min_shares", self_reference_max_shares" 
+cor(news[5:6]) # we will keep these 2 variables
+
+
+# Keyword features
+pairs(news[17:23]) # for variables kw_max_min,kw_min_max,kw_max_max,kw_avg_max,kw_min_avg, kw_max_avg and kw_avg_avg. 
+cor(news[17:23]) #we find kw_max_avg and kw_avg_avg are high correlated (0.8164474),we will choose kw_avg_avg, drop kw_max_avg
+
+```
+
+```{r}
+# NLP features
+
+ggplot(aes(title_subjectivity,abs_title_subjectivity) ,data=news)+geom_point()+geom_smooth()
+
+ggplot(aes(title_sentiment_polarity,abs_title_sentiment_polarity) ,data=news)+geom_point()+geom_smooth()
+
+sum(news$title_subjectivity < 0.5)/nrow(news) # title_subjectivity is Article text subjectivity score
+# abs_title_subjectivity is title_subjectivity absolute difference to 0.5
+
+# in order not to loose information about the direction of this original value, we create a new variable, to indicate if the distance is positive or negative.
+
+news<- mutate(news, title_subjectivity_dis= ifelse( title_subjectivity>=0.5, abs_title_subjectivity, -abs_title_subjectivity))
+news$title_subjectivity_dis
+
+# in this step we will do same process to abs_title_sentiment_polarity and title_sentiment_polarity
+# abs_title_sentiment_polarity is title_sentiment_polarity absolute difference to 0(not 0.5 ), the definition in the document is not correct.
+news<- mutate(news, title_sentiment_polarity_dis= ifelse( title_sentiment_polarity>=0, abs_title_sentiment_polarity, -abs_title_sentiment_polarity))
+
+# we will drop abs_title_sentiment_polarity and title_sentiment_polarity, abs_title_subjectivity and title_subjectivity
+
+ggplot(aes(title_subjectivity_dis,log(shares)) ,data=news)+geom_point()+geom_smooth()
+
+ggplot(aes(title_sentiment_polarity_dis,log(shares)) ,data=news)+geom_point()+geom_smooth()
+
+
+```
+```{r}
+"global_subjectivity"          
+#[41] "global_sentiment_polarity"     "global_rate_positive_words"   
+#[43] "global_rate_negative_words"    "rate_positive_words"          
+#[45] "rate_negative_words"           "avg_positive_polarity"        
+#[47] "min_positive_polarity"         "max_positive_polarity"        
+#[49] "avg_negative_polarity"         "min_negative_polarity"        
+#[51] "max_negative_polarity"  
+
+news_npl <- news[,c(56,40:51)]
+head(news_npl)
+pairs(news_npl[1:7],cex=0.1)
+cor(news_npl[2:13])#  rate_negative_words and rate_positive_words are highly correlated (r= -0.9976925), we will drop rate_negative_words.
+
+library(caret)
+
+high_corr <- findCorrelation(cor(news_npl,use="complete.obs"), cutoff = 0.75)
+high_corr = names((news_npl)[high_corr])
+high_corr
+
+
+```
+
+
+
+
+### categorical data exploration
+```{r}
 lda <- news$LDA_00+news$LDA_01+news$LDA_02+news$LDA_03+news$LDA_04
 hist(lda)
-## the sum of this five variabals =1, In this case we should drop one of these variables,we drop LDA_00 in our model.
+## the sum of this five variables =1, In this case we should drop one of these variables,we drop LDA_00 in our model.
+```
+
+
+
+```{r}
 
 # recoding the dummy variables
 news$channel[news$data_channel_is_lifestyle==1] <-"lifestyle"
@@ -50,10 +184,13 @@ news$channel[news$data_channel_is_tech==1] <-"tech"
 news$channel[news$data_channel_is_world==1] <-"world"
 news$channel[news$data_channel_is_world==0 & news$data_channel_is_lifestyle==0 & news$data_channel_is_entertainment==0 & news$data_channel_is_socmed==0 & news$data_channel_is_tech==0] <-"other"
 news$channel <- factor(news$channel)
-
+ggplot(news,aes(channel))+geom_bar()
 ggplot(news, aes(channel,log(shares)))+
   geom_boxplot()
 
+```
+
+```{r}
 
 # recoding the dummy variables
 news$weekday[news$weekday_is_monday==1] <-"monday"
@@ -71,55 +208,99 @@ ggplot(news, aes(as.factor(is_weekend),log(shares)))+
   geom_boxplot()
 # comment: There are no differences through Monday to Friday on log(shares), median log(shares) for weekends is abviously higher than not weekends. We can drop redundant variables and keep is_weekend instead.
 
-drop redundant variables
+```
+### drop redundant variables
+```{r}
 news1 <- news %>%
   select(-weekday_is_monday, -weekday_is_tuesday, -weekday_is_wednesday, -weekday_is_thursday, -weekday_is_friday, -weekday_is_saturday,-weekday_is_sunday,-data_channel_is_entertainment,-
     data_channel_is_bus,-data_channel_is_socmed ,-data_channel_is_tech,-
-    data_channel_is_world,-LDA_00,-weekday)
-length(news1) # we have 44 variables in our final data set 
+    data_channel_is_world,-LDA_00,-weekday,-n_unique_tokens,-kw_max_avg,-self_reference_min_shares,- self_reference_max_shares,-title_subjectivity,-title_sentiment_polarity,-abs_title_subjectivity,-abs_title_sentiment_polarity,-rate_negative_words)
+length(news1) # we have 37 variables in our final data set 
 names(news1)
-hist(news$kw_max_max)
-ggplot(news, aes(kw_max_max,log(shares)))+
-  geom_point(cex=0.1)+
-  geom_smooth()
+```
+
+## build the model
+
+### set up training and test data set
+
+```{r}
 set.seed(123)
 n<-nrow(news1)
 
-index_train <- sample(1:n, round(0.7*n))
+index_train <- sample(1:n, round(0.7*n)) # we randomly choose 70% of the data as training data 
 newstrain <- news1[index_train,]
 newstest <- news1[-index_train,]
+```
+
+
+```{r}
 lmnew_full <- lm(shares~.,data=newstrain)
 summary(lmnew_full)
 
 
 plot(lmnew_full)
-refit the model
-using log- transformation
+```
+
+
+## refit the model
+### using log- transformation
+
+```{r}
 lmnew_full_log <- lm(log(shares)~.,data=newstrain)
 summary(lmnew_full_log )
 plot(lmnew_full_log)
+```
+
+
+```{r}
 
 lmnew_full_logs <- step(lmnew_full_log,trace=F)
 summary(lmnew_full_logs)
 plot(lmnew_full_logs)
-using boxcox
+```
+
+
+### using boxcox
+
+```{r}
 library(MASS)
 library(car)
 boxcox(lmnew_full)
 summary(powerTransform(lmnew_full))
 
+```
+
+
+```{r}
 
 lmnew_full_t <- lm((((shares ^ -0.22) - 1) / (-0.22))~.,data=newstrain)
 summary(lmnew_full_t )
 
+```
+
+
+```{r}
 
 plot(lmnew_full_t)
 
-improve the model
+```
+
+
+
+## improve the model 
+
+
+```{r}
 
 lmnew_full_ts <- step(lmnew_full_t,trace=F)
 summary(lmnew_full_ts)
+plot(lmnew_full_ts)
+```
 
+
+
+
+```{r}
 
 plotpoint <- function(z,x,y) {
   ggplot(z,aes(x,y))+
@@ -127,125 +308,219 @@ plotpoint <- function(z,x,y) {
   geom_smooth(se=F)
 }
 
+```
 
-plotpoint(newstrain,newstrain$n_tokens_title,((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("n_tokens_title")
 
 
-plotpoint(newstrain,newstrain$n_non_stop_unique_tokens,((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("n_non_stop_unique_tokens")
 
+```{r}
 
 plotpoint(newstrain,sqrt(newstrain$n_tokens_content),((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("n_tokens_content")
 
+```
 
-plotpoint(newstrain,sqrt(newstrain$num_hrefs),((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("num_hrefs")
+```{r}
+
 
 plotpoint(newstrain,newstrain$num_hrefs,((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("num_hrefs")
-plotpoint(newstrain,log(newstrain$num_hrefs),((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("num_hrefs")
 
+
+```
+
+```{r}
 
 plotpoint(newstrain,newstrain$num_self_hrefs,((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("num_self_hrefs")
 
-plotpoint(newstrain,sqrt(newstrain$num_self_hrefs),lmnew_full_ts$fitted.values) + xlab("num_self_hrefs")
 
+
+```
+
+```{r}
 
 plotpoint(newstrain,sqrt(newstrain$num_videos),((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("num_videos")
 
-plotpoint(newstrain,newstrain$num_videos,log(newstrain$shares)) + xlab("num_videos")
 
+
+```
+
+
+```{r}
 
 
 plotpoint(newstrain,sqrt(newstrain$self_reference_avg_sharess),((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("self_reference_avg_sharess")
 
-plotpoint(newstrain,newstrain$self_reference_avg_sharess,log(newstrain$shares)) + xlab("self_reference_avg_sharess")
 
 
-lmnew_full_ts1 <- lm(formula = (((shares^-0.22) - 1)/(-0.22)) ~ n_tokens_title + 
+```
+
+
+
+
+```{r}
+plotpoint(newstrain,sqrt(newstrain$average_token_length),((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("average_token_length")
+```
+
+
+
+```{r}
+## it seems there is no relationship between n_tokens_title and the transformer response variable, the t-test in the previous model also tell the relationship is not significant, we will drop this variable in our refit model
+
+plotpoint(newstrain,newstrain$n_tokens_title,((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("n_tokens_title") 
+```
+
+```{r}
+# these following variables have linear relationship with our transformed response variable.
+
+plotpoint(newstrain,newstrain$n_non_stop_unique_tokens,((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("n_non_stop_unique_tokens")
+
+plotpoint(newstrain,newstrain$LDA_01,((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab(" LDA_01")
+
+plotpoint(newstrain,newstrain$ min_positive_polarity,((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab(" min_positive_polarity")
+
+plotpoint(newstrain,newstrain$global_subjectivity,((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("global_subjectivity")
+
+plotpoint(newstrain,newstrain$avg_negative_polarity,((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("avg_negative_polarity")
+
+
+plotpoint(newstrain,newstrain$title_subjectivity_dis,((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab("title_subjectivity_dis")
+
+plotpoint(newstrain,newstrain$ title_sentiment_polarity_dis,((newstrain$shares^-0.22) - 1)/(-0.22)) + xlab(" title_sentiment_polarity_dis")
+```
+
+
+```{r}
+# we will refit our model using the findings above,add the polynomial effect and drop the none significant variable n_tokens_title.
+
+lmnew_full_ts1 <- lm(formula = (((shares^-0.22) - 1)/(-0.22)) ~ 
     poly(sqrt(n_tokens_content),2)  + n_non_stop_unique_tokens + 
     sqrt(num_hrefs) + poly(sqrt(num_self_hrefs),2) + poly(sqrt(num_imgs),2) + poly(sqrt(num_videos),3) + average_token_length + 
     num_keywords +channel +sqrt(kw_max_min)  +  + 
-    kw_min_max + kw_avg_max  + kw_max_avg + kw_avg_avg + 
-   sqrt(self_reference_min_shares) + poly(sqrt(self_reference_avg_sharess),3) + 
+    kw_min_max + kw_avg_max  + kw_avg_avg  + poly(sqrt(self_reference_avg_sharess),3) + 
     is_weekend + LDA_01 + LDA_02 + LDA_03 + LDA_04 + global_subjectivity + 
     global_sentiment_polarity + global_rate_positive_words + 
     rate_positive_words + min_positive_polarity + avg_negative_polarity + 
-    title_subjectivity + title_sentiment_polarity + abs_title_subjectivity,
+    title_subjectivity_dis + title_sentiment_polarity_dis ,
     data = newstrain)
 
 summary(lmnew_full_ts1)
 plot(lmnew_full_ts1)
 
+```
 
-## check colinearity vif 
+```{r}
+# in our final model, we can see multiple R-squared:0.1362,	Adjusted R-squared:  0.1351 both of these two values are higher than the model without polynomial effect model multiple R-squared:  0.1195,	Adjusted R-squared:  0.1185
+lmnew_final <- step(lmnew_full_ts1,trace=F)
+summary(lmnew_final)
+plot(lmnew_final,1:2)
 
-vif(lmnew_full_ts1)
+```
 
+
+
+
+```{r}
+
+## check collinearity vif 
+## there are no serious collinearity problems in our model
+vif(lmnew_final)
+
+```
+
+
+
+```{r}
 
 ### check outliers
-p<-42
+p<-35
 n<-nrow(newstrain)
-plot(hatvalues(lmnew_full_ts1), rstandard(lmnew_full_ts1),
+plot(hatvalues(lmnew_final), rstandard(lmnew_final),
 xlab='Leverage', ylab='Standardized Residuals')
-abline(v=2*(p+1)/n)
 
-ind <- which(hatvalues(lmnew_full_ts1)>0.06)
+abline(v=4*(p+1)/n)
+
+ind <- which(hatvalues(lmnew_final)>0.12)
 newstrain[ind,]
 
+```
 
-lmnew_full_ts4 <- step(lmnew_full_ts1,trace=F)
-summary(lmnew_full_ts4)
- plot(lmnew_full_ts4)
+
+
+
+
+
+
+
+```{r}
 # variable importance 
 library(vip)
- vip(lmnew_full_ts4, num_features = 30, geom = "point", include_type = TRUE)
-
-# calculate r_squre by hand
-y<-((newstrain$shares^-0.22) - 1)/(-0.22)
-SST <-sum((y-mean(y))^2)
-Res<- y-lmnew_full_ts4$fitted.values
-rss <-sum(Res^2)
-Rsquerd_4 <- 1-(rss/SST)
-Rsquerd_4
-
-
-Evaluate model proformance
-
-# function to compute RMSE
-RMSE <- function(y, y_hat) {
-  sqrt(mean((y - y_hat)^2))
-}
-
-lm_pred4 <- predict(lmnew_full_ts4,newstest)
-y_test <-((newstest$shares^-0.22) - 1)/(-0.22)
-rmse4 <- RMSE(y_test, lm_pred4)
-rmse4
+ vip(lmnew_final, num_features = 30, geom = "point", include_type = TRUE)
+```
 
 
 
-# calculate r_squre by hand 
+
+
+## Evaluate model proformance
+
+
+### generate predictions for the testing dataset
+
+```{r}
+
+lm_pred_final <- predict(lmnew_final,newstest) # using the final model 
+lm_pred_ts <- predict(lmnew_full_ts,newstest) # using the boxcox transformed model with no polynomial effects
+lm_pred_log <- predict(lmnew_full_logs,newstest) # using the log transformed model
+
+```
+
+### evaluate the model using adjusted Rsquare.
+```{r}
+
+
+# calculate r_square and adjusted r_square for the final model
 y<-((newstest$shares^-0.22) - 1)/(-0.22)
 SST <-sum((y-mean(y))^2)
-Res4<- y-lm_pred4
+Res4l<- y-lm_pred_final
 SSR4 <-sum(Res4^2)
-Rsquerd4 <- 1-(SSR4/SST)
-Rsquerd4
+Rsquerd_final <- 1-(SSR4/SST)
+Rsquerd_final
 
-lm_pred1 <- predict(lmnew_full_ts1,newstest)
-rmse1 <- RMSE(y_test, lm_pred1)
-rmse1
+n <- nrow(newstest)
+# p_final <-35
+adjust_Rsquerd_final <- 1-(SSR4/SST)*((n-1)/(n-35-1))
+adjust_Rsquerd_final
+```
+
+```{r}
+
+
+ # calculate r_square and adjusted r_square for the boxcox transformed model
 
 y<-((newstest$shares^-0.22) - 1)/(-0.22)
 SST <-sum((y-mean(y))^2)
-Res1<- y-lm_pred1
-SSR1 <-sum(Res1^2)
-Rsquerd1 <- 1-(SSR1/SST)
-Rsquerd1
+Res3<- y-lm_pred_ts
+SSR3 <-sum(Res3^2)
+Rsquerd_ts <- 1-(SSR3/SST)
+Rsquerd_ts
 
-## check the log_transformation model preofence
+adjust_Rsquerd_ts <- 1-(SSR3/SST)*((n-1)/(n-31-1))
+adjust_Rsquerd_ts
+```
 
-y_log <-log(newstest$shares)
-pred_1og <- predict(lmnew_full_log,newstest)
+
+```{r}
+
+
+# calculate r_square and adjusted r_square for the log transformed model
+y_log <- log(newstest$shares)
 SST_log <-sum((y_log-mean(y_log))^2)
-Res_log<- y_log-pred_1og
-SSR_log <-sum(Res_log^2)
-Rsquerd_log <- 1-(SSR_log/SST_log)
+Res2<- y_log-lm_pred_log
+SSR2 <-sum(Res2^2)
+Rsquerd_log <- 1-(SSR2/SST_log)
 Rsquerd_log
+
+adjust_Rsquerd_log <- 1-(SSR2/SST_log)*((n-1)/(n-30-1))
+adjust_Rsquerd_log
+```
+
+
