@@ -12,7 +12,7 @@ Data set discription:
 
 This dataset summarizes a heterogeneous set of features about articles published by Mashable in a period of two years. 
 The goal is to predict the number of shares in social networks (popularity).
-The features provided broadly come from 5 areas :
+The features provided broadly come from 6 areas :
 1) Word features
 2) Links & References features
 3) Digital Media features
